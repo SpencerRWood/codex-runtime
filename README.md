@@ -1,88 +1,115 @@
-# template-python-dagster
+# codex-runtime
 
-A typed Python starting point for Dagster code locations that run scheduled, asset-oriented, sensor-driven, or otherwise orchestrated workloads. It is suitable for reporting, ingestion, sync, and similar workflows. The examples run without external services.
+Shared, typed Python contract for Codex five-hour and weekly capacity. Execution
+is permitted only when both windows are confirmed available. This library owns
+capacity inspection and reset normalization; consumers own workflow state,
+durable deferral, prompts, approvals and attempt accounting.
 
-## Choose a template
+Created directly from the tracked files of
+`SpencerRWood/template-python-dagster` at
+`2b7d901e63095def72171397e3f5b99d457497d3`. The renamed `codex_runtime` package
+retains the template's Python 3.14, Dagster, typed src layout, Hatch packaging,
+Ruff, strict mypy, pytest, pre-commit and centralized validation/release callers.
+Coverage validation is explicitly enabled in the shared release contract to
+enforce the template's existing 90% floor on this fail-closed capability.
+The unused example asset/job/schedule and placeholder transforms are replaced
+by the library. `codex_runtime.dagster.definitions:defs` is a valid, empty code
+location: this shared contract schedules no consumer workflows.
 
-| Template | Use it for |
+## Usage
+
+Install the reviewed release of `codex-runtime` in each consumer. Before a
+release exists, a local checkout can be installed for integration testing with
+`uv pip install /path/to/codex-runtime`. Do not depend on an unreviewed branch
+in deployment; pin the delivered release/revision in the consumer's lockfile.
+
+```python
+from codex_runtime import AppServerProvider, check_availability
+
+capacity = check_availability(AppServerProvider(timeout_seconds=15))
+if capacity.available:
+    # Consumer may execute its own work.
+    pass
+elif capacity.provider_resets_at is not None:
+    # Consumer durably defers until this provider boundary plus five minutes.
+    pass
+else:
+    # Consumer remains deferred: no reliable all-windows reset is known.
+    pass
+```
+
+`AppServerProvider` requires an installed Codex CLI and its existing authenticated
+ChatGPT account in the runtime environment. It performs the stdio initialization
+handshake and one `account/rateLimits/read`, with a total timeout, 64 KiB line
+limit and 100-message response bound, then terminates/reaps its subprocess.
+It starts no thread or inference turn, consumes no reset credit, retries nothing,
+and does not read credentials itself or return raw errors. Synchronous API calls
+belong in sync workers; async consumers can use `await asyncio.to_thread(...)`.
+The Docker image is a Dagster code-location scaffold; it does not bundle Codex
+or provision authentication. Consumers supply the execution runtime.
+
+The transport follows the [official Codex app-server documentation](https://learn.chatgpt.com/docs/app-server).
+The local CLI-generated `GetAccountRateLimitsResponse` schema was also inspected
+for permission and spend-control fields. Windows are selected by explicit
+`windowDurationMins` values 300 and 10080, independent of primary/secondary order.
+Other durations, missing windows and duplicate durations fail closed. The
+`codex` entry in `rateLimitsByLimitId` is authoritative when the map is present;
+the legacy `rateLimits` view is used only when that map is absent/null. Other
+metered buckets and purchased/unlimited credits cannot bypass either window.
+Provider permission denials/unknown explicit permission, spend-control denials,
+and inconsistent or unrecognized limit-reached states also block execution.
+
+## Normalized result
+
+| Field | Meaning |
 | --- | --- |
-| `template-python-analytics` | Reusable analysis and transformation workflows without orchestration. |
-| `template-python-dagster` | Scheduled, asset-oriented, sensor-driven, or orchestrated workloads. |
-| `template-fastapi-service` | Long-running HTTP/API applications. |
+| `available` | True only when both windows are confirmed available and no provider denial applies. |
+| `five_hour`, `weekly` | Immutable `WindowAvailability` with scope, tri-state availability, usage percent, provider reset and reason. `None` availability means unknown, never permission. |
+| `blocking_scopes` | Required windows that are exhausted or unconfirmed; provider-wide denials are reported separately in `reason`. |
+| `checked_at` | Timezone-aware UTC observation time, recorded after the provider read. |
+| `reason` | `available`, `exhausted`, `unknown_capacity`, `missing_reset`, `invalid_reset`, `provider_error`, or `provider_blocked`. |
+| `provider_resets_at` | Latest blocking reset only when all blockers have reliable boundaries; otherwise None. |
 
-## Structure
+Usage must be an integer in 0..100; 100 means exhausted. Resets are positive Unix
+seconds normalized to UTC, with past/equal-time or malformed resets rejected.
+An available window can omit its optional reset. An exhausted window without a
+reset still blocks, but no aggregate recovery time can be claimed. Unknown data
+or errors never imply recovery, even when another window has a known reset.
+Recheck immediately before execution: this is an observation, not a capacity
+reservation, and crossing a reset does not itself establish availability.
 
-```text
-src/template_python_dagster/
-  __init__.py
-  py.typed
-  config.py
-  models.py
-  transforms.py
-  validation.py
-  io/
-    __init__.py
-    readers.py
-    writers.py
-  dagster/
-    __init__.py
-    assets.py
-    jobs.py
-    resources.py
-    schedules.py
-    sensors.py
-    definitions.py
-tests/
-Dockerfile
-.github/release.toml
-```
+`RateLimitProvider` supports an injected provider for other transports and
+offline tests. `normalize_rate_limits(payload, checked_at=...)` accepts the RPC
+**result**, not its envelope. All provider-specific decoding stays here.
 
-`dagster/definitions.py` exports `defs`, a `dagster.Definitions` object. The one example asset, job, resource, and schedule show registration and execution. Delete any examples you do not need and remove their imports and entries from `defs`; no other architecture needs to change. `sensors.py` is empty until a consuming project needs a sensor. The other package modules remain small placeholders for application logic.
+## Consumers
 
-## Local development
+See [the shared consumer contract](docs/consumer-contract.md) for
+architecture-docs and automerge-repair. Both compute `next_retry_at` as the latest
+blocking provider reset plus five minutes and persist their own deferral.
+Neither implements a duplicate provider checker. An unknown aggregate boundary
+requires a consumer-owned failure/deferral policy, never an invented reset.
 
-Python 3.14, `uv`, Hatchling, Ruff, strict mypy, pytest, pre-commit, and conventional commits follow the analytics template.
+## Development and packaging
 
 ```sh
-uv lock
 uv sync --frozen --group dev
-uv run pre-commit install
-uv run dagster dev -m template_python_dagster.dagster.definitions
-```
-
-The local Dagster command starts the UI and daemon. The example schedule is defined in code; enable it in the UI if you want it to run. It does not need an external service. Set `APP_MESSAGE` to change the example resource value. Add real runtime settings as typed fields in `config.py`; inject secrets through environment variables at deployment time (for example, with Infisical). Do not put credentials in source control.
-
-Run the quality gates:
-
-```sh
-uv run ruff check .
-uv run ruff format --check .
-uv run mypy
-uv run pytest
+wood repo validate --json
 uv build
-uv run pre-commit run --all-files
+uv run dagster dev -m codex_runtime.dagster.definitions
 ```
 
-## Container and shared deployment
-
-Build and run the code-location gRPC server:
+Contract tests cover both available, each window exhausted, both exhausted with
+different resets, malformed/unknown capacity, missing/stale/invalid resets,
+provider denials/errors and offline app-server handshake/timeout/cleanup.
+No test needs credentials, network capacity reads or Codex inference.
 
 ```sh
-docker build -t template-python-dagster .
-docker run --rm -e DAGSTER_GRPC_PORT=4000 -p 4000:4000 template-python-dagster
+docker build -t codex-runtime .
+docker run --rm -e DAGSTER_GRPC_PORT=4000 -p 4000:4000 codex-runtime
 ```
 
-The container loads `template_python_dagster.dagster.definitions` with `dagster api grpc`. It takes the listener port from `DAGSTER_GRPC_PORT`; choose that port in the consuming deployment. The image has no deployment hostname, secrets, or service address. Keep the Dagster version compatible with the shared deployment and provide any application configuration at runtime.
-
-The consuming application owns its assets, jobs, schedules, and sensors. The shared infrastructure repository only builds/deploys the image, injects runtime environment and secrets, and registers its gRPC endpoint as a code location in the Dagster workspace. For example, infrastructure can configure a `grpc_server` entry with `host`, `port`, and `location_name` matching its deployed container; those values belong in infrastructure configuration, not this template. The shared Dagster daemon evaluates schedules and sensors registered from the application code location. Infrastructure should not duplicate their definitions.
-
-The release caller uses the centralized `SpencerRWood/workflows` release and validation contracts at `@v1`. A copied project can use the shared container release workflow to publish its own image after a release.
-
-## Copy and rename
-
-1. Create a new repository and copy this template's tracked files.
-2. Replace `template-python-dagster` with the new distribution/repository name and `template_python_dagster` with the new import package name in `pyproject.toml`, `src/`, `tests/`, `Dockerfile`, `.github/`, and this README. Rename the package directory. Keep the module path in the Docker command and local Dagster command aligned.
-3. Update the package description, runtime settings, assets, resources, jobs, schedules, and sensors for the application. Remove unused examples and their `Definitions` entries.
-4. Run `uv lock`, `uv sync --frozen --group dev`, and the quality gates above. Build and test the container before registering its code location in shared infrastructure.
-
-The semantic-release setup uses conventional commits and `v`-prefixed tags. `.github/release.toml` declares Python package validation and build capabilities for the centralized workflow.
+Infrastructure owns deployment, runtime secrets and workspace registration.
+Semantic release owns versions/tags/releases using the existing
+`SpencerRWood/workflows` v1 callers. Initial library delivery does not require
+deploying a long-running code location.

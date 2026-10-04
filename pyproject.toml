@@ -3,9 +3,9 @@ requires = ["hatchling>=1.27"]
 build-backend = "hatchling.build"
 
 [project]
-name = "template-python-dagster"
+name = "codex-runtime"
 version = "0.1.0"
-description = "A typed Python template for Dagster code locations and orchestrated workloads."
+description = "Shared fail-closed Codex five-hour and weekly capacity contract."
 readme = "README.md"
 requires-python = ">=3.14"
 authors = [
@@ -34,7 +34,7 @@ dev = [
 ]
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/template_python_dagster"]
+packages = ["src/codex_runtime"]
 
 [tool.hatch.build.targets.sdist]
 exclude = [
@@ -54,7 +54,7 @@ testpaths = ["tests"]
 
 [tool.coverage.run]
 branch = true
-source = ["template_python_dagster"]
+source = ["codex_runtime"]
 
 [tool.coverage.report]
 fail_under = 90
@@ -97,6 +97,7 @@ ignore = [
 "tests/**/*.py" = [
   "S101",
 ]
+"tests/fixtures/*.py" = ["T201"]
 
 [tool.ruff.format]
 quote-style = "double"
