@@ -143,3 +143,8 @@ token = { env = "GITHUB_TOKEN" }
 
 [tool.semantic_release.publish]
 upload_to_vcs_release = true
+
+[tool.wood.architecture]
+domain = "engineering"
+capability = "agent-runtime"
+kind = "library"
