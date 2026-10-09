@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v0.2.1 (2026-10-09)
+
+### Bug Fixes
+
+- Include architecture metadata in released artifacts
+  ([`85e8d31`](https://github.com/SpencerRWood/codex-runtime/commit/85e8d31d4512d2ab7bcd48a83ccb2b28b389bd3c))
+
+
 ## v0.2.0 (2026-10-04)
 
 ### Features
