@@ -1,5 +1,6 @@
 """Preserve template packaging and centralized release conventions."""
 
+import re
 import tomllib
 from pathlib import Path
 
@@ -22,9 +23,9 @@ def test_typed_package_and_release_contract() -> None:
     assert (ROOT / "src/codex_runtime/py.typed").is_file()
     assert "check_availability" in codex_runtime.__all__
     for workflow in ("validate", "release"):
-        assert (
-            f"SpencerRWood/workflows/.github/workflows/{workflow}.yml@v1"
-            in (ROOT / f".github/workflows/{workflow}.yml").read_text()
+        assert re.search(
+            rf"SpencerRWood/workflows/\.github/workflows/{workflow}\.yml@[a-f0-9]{{40}}",
+            (ROOT / f".github/workflows/{workflow}.yml").read_text(),
         )
     release = tomllib.loads((ROOT / ".github/release.toml").read_text())
     assert release["build"]["python_package"] is True
