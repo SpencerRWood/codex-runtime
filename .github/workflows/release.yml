@@ -1,11 +1,21 @@
-name: Release
-
-on:
-  push:
-    branches: [main]
-
-jobs:
-  release:
-    uses: SpencerRWood/workflows/.github/workflows/release.yml@v1
-    permissions:
-      contents: write
+{
+  "name": "Release",
+  "on": {
+    "push": {
+      "branches": [
+        "main"
+      ]
+    }
+  },
+  "jobs": {
+    "release": {
+      "uses": "SpencerRWood/workflows/.github/workflows/release.yml@1b806a4ebce73dcab2f0ecf26ffc47b00fac8ef7",
+      "permissions": {
+        "contents": "write"
+      },
+      "with": {
+        "workflow_revision": "1b806a4ebce73dcab2f0ecf26ffc47b00fac8ef7"
+      }
+    }
+  }
+}
